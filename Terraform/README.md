@@ -8,6 +8,7 @@ This repo does not include any REDCap shared services such as Azure FrontDoor or
 
 Before you begin, make sure you have the following:
 
+- Understanding of and/or experience with Terraform
 - Hub/Spoke network topology.
     - The hub virtual network will need to have a firewall in place.
     - If your Active Directory Domain Controller or Azure AD Domain Services is in another spoke network, you'll need to have routes in place to ensure transitive networking is enabled from the REDCap spoke networks and the AD servers.
