@@ -1,6 +1,6 @@
 # Secure REDCap on Azure
 
-This repo is to be used to deploy REDCap for a researcher or research project. The terraform will provision all the infrastructure with all the necessary security controls in place. You will need to establish a vnet peering from the hub virtual network back to this REDCap virtual network and deploy source code to get the app up and running. From there, you will need to run the Ansible playbook (inventory file gets generated as part of this deployment) to configure WVD session hosts.
+This repo will deploy REDCap using Terraform. The terraform configuration will provision all the infrastructure with all the necessary security controls in place. You will need to establish a vnet peering from the hub virtual network back to this REDCap virtual network and deploy source code to get the app up and running. From there, you will need to run the Ansible playbook (inventory file gets generated as part of this deployment) to configure WVD session hosts.
 
 This repo does not include any REDCap shared services such as Azure FrontDoor or SendGrid. That needs to be managed from a separate repository.
 
