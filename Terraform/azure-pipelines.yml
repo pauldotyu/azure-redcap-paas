@@ -236,7 +236,6 @@ stages:
     - script: |
         terraform workspace select default
         terraform workspace delete $(workspace)
-        terraform workspace delete -force $(workspace)wvd
       displayName: Delete REDCap $(workspace) workspace
   - job: vnet_peer_destroy
     displayName: Delete VNET Peering
