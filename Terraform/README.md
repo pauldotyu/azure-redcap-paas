@@ -89,7 +89,7 @@ The alternative would be to create branches for each deployment but managing cod
 
 ## Deleting REDCap
 
-- If you have deployed a Recovery Services Vault, you'll need to make sure to stop and delete your VM and file share backups and remove the management lock on the resource group before running the `terraform destroy` command.
+- If you have deployed a Recovery Services Vault, you'll need to make sure to stop and delete your VM and file share backups, unregister your storage account from Backup Infrastructure, and remove the management lock on the resource group before running the `terraform destroy` command.
 - Be sure to delete the vnet peering from the hub to the REDCap instance
 - Be sure to delete the `terraform workspace`
 
