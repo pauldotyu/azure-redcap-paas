@@ -49,7 +49,7 @@ The resources provisioned using this repo will be named using the naming convent
 
 ## Workspaces
 
-In order to maintain multiple REDCap deployments with this repo, a decision was made to manage each deployment config using .tfvars files and terraform workspaces. Terraform workspaces will allow you to keep all deployment state information in a single storage account but logically separated using workspaces. With each deployment, you'll need to ensure you are selecting the right workspace and using the right .tfvars file. This can get difficult to manage and there's a high possibility of human error.
+In order to maintain multiple REDCap deployments with this repo, a decision was made to manage each deployment config using .tfvars files and [terraform workspaces](https://www.terraform.io/docs/language/state/workspaces.html#when-to-use-multiple-workspaces). Terraform workspaces will allow you to keep all deployment state information in a single storage account but logically separated using workspaces. With each deployment, you'll need to ensure you are selecting the right workspace and using the right .tfvars file. This can get difficult to manage and there's a high possibility of human error.
 
 The alternative would be to create branches for each deployment but managing code changes between branches can become cumbersome over time as well. 
 
