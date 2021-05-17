@@ -2,7 +2,7 @@
 
 This repo will deploy REDCap using Terraform. The terraform configuration will provision all the infrastructure with all the necessary security controls in place. This repo assumes you have a hub/spoke network topology in place in Azure. This REDCap deployment will be a spoke within your overall Azure architecture. Once the infrastructure has been provisioned, you will need to establish a vnet peering from the hub virtual network back to this REDCap virtual network and deploy source code to get the app up and running. From there, you can run the Ansible playbook (inventory file gets generated as part of this deployment) to configure WVD session hosts.
 
-This repo does not include any REDCap shared services such as Azure FrontDoor or SendGrid. That needs to be managed from a separate repository.
+> This repo does not include any REDCap shared services such as Azure FrontDoor or SendGrid. That needs to be managed from a separate repository.
 
 ## Prerequisites
 
@@ -73,7 +73,7 @@ The alternative would be to create branches for each deployment but managing cod
     > The recovery policy will need to be standardized and/or variable-ized
 - Ansible inventory file which you can use to run the `site.yml` playbook against
 
-## Provisioning REDCap
+## Provisioning REDCap Infrastructure
 
 1. Create a new `*.tfvars` file and drop into the `workspaces` directory
     > The name of your `*.tfvars` file and the `terraform workspace` will be the same
@@ -86,6 +86,55 @@ The alternative would be to create branches for each deployment but managing cod
 
 1. Next, deploy the source code from the github repo
     > The command to deploy the source is in the `terraform output` as `deploy_source`
+
+## Configure REDCap WVD Workstations
+
+Configuration of secure workstations will be automated using Ansible. The `site.yml` ansible playbook found in this repo relies on a few variables needed to  domain join your virtual machines. Rather then saving credentials to the repo (never a good thing) we'll use `ansible-vault` to encrypt contents and pass in a `secrets.yml` file on the ansible-playbook run. 
+
+Let's start by creating a vault file:
+
+```sh
+ansible-vault create secrets.yml
+```
+
+Type in a new vault password and enter the following contents:
+
+> You're using `vi` here so make sure you hit the `i` key be in `insert` mode
+
+```sh
+dns_domain_name: <YOUR_DOMAIN_NAME>
+domain_admin_user: <YOUR_DOMAIN_JOIN_USER>
+domain_admin_password: <YOUR_DOMAIN_JOIN_PASSWORD>
+domain_ou_path: <YOUR_DOMAIN_OU_PATH>
+```
+
+> Save the file using the following command `:wq`
+
+The file `secrets.yml` needs to be saved to your repository or downloaded as a secure file within your pipeline.
+
+To use view the ansible vault file you'll need to enter the vault password to decrypt the contents. However, in a pipeline scenario, you will not have the opportunity to enter the pipeline at runtime, but you can use a file and point the ansible-vault to that. This is the approach we'll use for the pipeline. 
+
+Create a vault-pass file.
+
+```sh
+echo '<YOUR_ANSIBLE_VAULT_PASSWORD>' > vaultpass
+```
+
+To ensure you did all this properly, you can use the `view` subcommand of `ansible-vault`. This will decrypt the vault and display the contents you entered.
+
+```sh
+ansible-vault view secrets.yml --vault-password-file vaultpass
+```
+
+If all looks good, be sure the variable names aligns with the variables we'll use in our playbook. When you are ready to run the playbook, you will run it by passing in additional variables from your `secrets.yml` file. This will be denoted using the `-e` flag and since we are referencing a file, you'll need to add the `@` symbol in front of the file name
+
+```sh
+ansible-playbook -i inventory-sample2 -e @secrets.yml --vault-password-file vaultpass site.yml
+```
+
+**Sources:** 
+[Encrypting content with Ansible Vault](https://docs.ansible.com/ansible/latest/user_guide/vault.html)
+[Handling secrets in your Ansible playbooks](https://www.redhat.com/sysadmin/ansible-playbooks-secrets)
 
 ## Deleting REDCap
 
@@ -101,13 +150,10 @@ This repo comes with an `azure-pipelines.yml` file. To use it, you'll need to se
 - `client-secret` - used by terraform
 - `tenant-id` - used by terraform
 - `main-subscription-id` - this is the id of the subscription where your storage account where remote state file lives
-- `local-vm-username`
-- `local-vm-password`
-- `domain-admin-username`
-- `domain-admin-password`
-- `domain-name`
-- `domain-ou-path`
-- `redcapzip`
+- `local-vm-username` - this will passed dynamically to the terraform apply command
+- `local-vm-password` - this will passed dynamically to the terraform apply command
+- `redcapzip` - this is the publically accessible (yet secure) URL to your REDCap zip file
+- `ansible-vault-password` - this is used to decrypt your ansible-vault without being prompted for a password
 
 You should also provision a small Linux VM in your REDCap shared services subscription and install the Azure DevOps Build Agent software on it. This way, you will be able to use your build machine to invoke the Ansible playbook against the new session host VMs using private IP addresses.
 
