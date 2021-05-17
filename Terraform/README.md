@@ -133,8 +133,8 @@ ansible-playbook -i inventory-sample2 -e @secrets.yml --vault-password-file vaul
 ```
 
 **Sources:** 
-[Encrypting content with Ansible Vault](https://docs.ansible.com/ansible/latest/user_guide/vault.html)
-[Handling secrets in your Ansible playbooks](https://www.redhat.com/sysadmin/ansible-playbooks-secrets)
+- [Encrypting content with Ansible Vault](https://docs.ansible.com/ansible/latest/user_guide/vault.html)
+- [Handling secrets in your Ansible playbooks](https://www.redhat.com/sysadmin/ansible-playbooks-secrets)
 
 ## Deleting REDCap
 
