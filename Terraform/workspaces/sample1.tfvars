@@ -46,7 +46,7 @@ storage_account_replication_type = "LRS"
 administrator_name               = "Paul Yu"
 administrator_email              = "pauyu@microsoft.com"
 firewall_ip                      = "10.21.1.132"
-dns_servers                      = ["168.63.129.16", "10.21.1.132"]
+dns_servers                      = ["10.21.1.132"]
 
 subnet_routes = [
   {
@@ -75,3 +75,5 @@ vnet_peerings = [
     vnet_resource_id = "/subscriptions/672f7b3e-5c19-454f-bb04-4843676bf396/resourceGroups/rg-netops/providers/Microsoft.Network/virtualNetworks/vn-hub"
   }
 ]
+
+devops_subnet_id = "/subscriptions/672f7b3e-5c19-454f-bb04-4843676bf396/resourceGroups/rg-devops/providers/Microsoft.Network/virtualNetworks/vn-devops/subnets/ComputeSubnet"

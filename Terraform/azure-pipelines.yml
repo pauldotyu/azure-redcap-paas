@@ -174,20 +174,10 @@ stages:
       displayName: Download inventory-$(workspace)
       name: download_inventory
     - script: |
-        pwd
-        echo "swap registration token in inventory file"
-        #sed -i "s/<LOCAL_VM_USERNAME>/$(local-vm-username)/; s~<LOCAL_VM_PASSWORD>~$(local-vm-password)~; s/<DOMAIN_ADMIN_USERNAME>/$(domain-admin-username)/; s~<DOMAIN_ADMIN_PASSWORD>~$(domain-admin-password)~; s/<DOMAIN_NAME>/$(domain-name)/; s/<DOMAIN_OU_PATH>/$(domain-ou-path)/; s/<REGISTRATION_TOKEN>/$(TF_REGISTRATION_TOKEN)/;" inventory-$(workspace)
-        sed -i "s/<LOCAL_VM_USERNAME>/$(local-vm-username)/g" inventory-$(workspace)
-        sed -i "s/<LOCAL_VM_PASSWORD>/${$(local-vm-password)//&/\\&}/g" inventory-$(workspace)
-        sed -i "s/<DOMAIN_ADMIN_USERNAME>/$(domain-admin-username)/g" inventory-$(workspace)
-        sed -i "s/<DOMAIN_ADMIN_PASSWORD>/${$(domain-admin-password)//&/\\&}/g" inventory-$(workspace)
-        sed -i "s/<DOMAIN_NAME>/$(domain-name)/g" inventory-$(workspace)
-        sed -i "s/<DOMAIN_OU_PATH>/$(domain-ou-path)/g" inventory-$(workspace)
-        sed -i "s/<REGISTRATION_TOKEN>/$(TF_REGISTRATION_TOKEN)/g" inventory-$(workspace)
-        cat inventory-$(workspace)
         ansible all -i inventory-$(workspace) -m win_ping
-        cat site.yml
-        ansible-playbook -i inventory-$(workspace) site.yml
+        sed -i "s/<REGISTRATION_TOKEN>/$(TF_REGISTRATION_TOKEN)/g" site.yml
+        echo '$(ansible-vault-password)' > vaultpass
+        ansible-playbook -i inventory-$(workspace) -e @secrets.yml --vault-password-file vaultpass site.yml
       displayName: Run Ansible playbook to install WVD agents and domain join
       workingDirectory: ansible
   - job: delete_files
@@ -202,7 +192,6 @@ stages:
     steps:
     - task: DeleteFiles@1
       inputs:
-        SourceFolder: $(Agent.BuildDirectory)
         Contents: '*'
         RemoveSourceFolder: true
 - stage: destroy
@@ -260,6 +249,5 @@ stages:
     steps:
     - task: DeleteFiles@1
       inputs:
-        SourceFolder: $(Agent.BuildDirectory)
         Contents: '*'
         RemoveSourceFolder: true

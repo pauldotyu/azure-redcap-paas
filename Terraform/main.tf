@@ -243,7 +243,8 @@ resource "azurerm_storage_account" "redcap" {
     virtual_network_subnet_ids = [
       azurerm_subnet.redcap["ComputeSubnet"].id,
       azurerm_subnet.redcap["IntegrationSubnet"].id,
-      azurerm_subnet.redcap["PrivateLinkSubnet"].id
+      azurerm_subnet.redcap["PrivateLinkSubnet"].id,
+      var.devops_subnet_id
     ]
 
     bypass = [
@@ -310,7 +311,8 @@ resource "azurerm_storage_account" "redcap_share" {
     virtual_network_subnet_ids = [
       azurerm_subnet.redcap["ComputeSubnet"].id,
       azurerm_subnet.redcap["IntegrationSubnet"].id,
-      azurerm_subnet.redcap["PrivateLinkSubnet"].id
+      azurerm_subnet.redcap["PrivateLinkSubnet"].id,
+      var.devops_subnet_id
     ]
 
     bypass = [
@@ -387,7 +389,8 @@ resource "azurerm_key_vault" "redcap" {
     virtual_network_subnet_ids = [
       azurerm_subnet.redcap["ComputeSubnet"].id,
       azurerm_subnet.redcap["IntegrationSubnet"].id,
-      azurerm_subnet.redcap["PrivateLinkSubnet"].id
+      azurerm_subnet.redcap["PrivateLinkSubnet"].id,
+      var.devops_subnet_id
     ]
   }
 
@@ -1131,7 +1134,9 @@ resource "local_file" "redcap" {
   filename = "ansible/inventory-${var.project_id}"
   content = templatefile("ansible/template-inventory.tpl",
     {
-      hosts = zipmap(azurerm_windows_virtual_machine.redcap.*.name, azurerm_network_interface.redcap.*.private_ip_address)
+      hosts    = zipmap(azurerm_windows_virtual_machine.redcap.*.name, azurerm_network_interface.redcap.*.private_ip_address)
+      user     = var.vm_username
+      password = var.vm_password
     }
   )
 

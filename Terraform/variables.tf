@@ -163,6 +163,10 @@ variable "administrator_name" {
   type = string
 }
 
+variable "devops_subnet_id" {
+  type = string
+}
+
 #############################################
 # AZURE ARM TEMPLATE PARAMETERS
 #############################################
