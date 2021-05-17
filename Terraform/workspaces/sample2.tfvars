@@ -46,7 +46,7 @@ storage_account_replication_type = "LRS"
 administrator_name               = "Paul Yu"
 administrator_email              = "pauyu@microsoft.com"
 firewall_ip                      = "10.21.1.132"
-dns_servers                      = ["10.21.1.132"]
+dns_servers                      = ["10.21.1.132", "168.63.129.16"]
 
 subnet_routes = [
   {
