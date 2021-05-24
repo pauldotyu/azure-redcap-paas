@@ -8,12 +8,14 @@ This repo will deploy REDCap using Terraform. The terraform configuration will p
 
 Before you begin, make sure you have the following:
 
-- Understanding of and/or experience with Terraform
-- Implementation of Azure Enterprise Scale Landing Zones
+- Understanding of and/or experience with [Terraform on Azure](https://docs.microsoft.com/en-us/azure/developer/terraform/)
+
+- Implementation of [Azure Enterprise Scale Landing Zones](https://docs.microsoft.com/en-us/azure/cloud-adoption-framework/ready/enterprise-scale/architecture)
     - To keep consistent with Terrafrom tooling, you may want to implement this [Azure/caf-enterprise-scale](https://registry.terraform.io/modules/Azure/caf-enterprise-scale/azurerm/latest) module for ESLZ
-- Hub/Spoke network topology.
-    - The hub virtual network will need to have a firewall in place.
-    - If your Active Directory Domain Controller or Azure AD Domain Services is in another spoke network, you'll need to have routes in place to ensure transitive networking is enabled from the REDCap spoke networks and the AD servers.
+
+- [Hub/Spoke network topology](https://docs.microsoft.com/en-us/azure/architecture/reference-architectures/hybrid-networking/hub-spoke?tabs=cli).
+    - The hub virtual network should have to have an [Azure Firewall](https://azure.microsoft.com/en-us/services/azure-firewall/) or 3rd party NVA in place.
+    - If your Active Directory Domain Controller or [Azure AD Domain Services](https://docs.microsoft.com/en-us/azure/active-directory-domain-services/overview) is in another spoke network, you'll need to have [routes in place](https://docs.microsoft.com/en-us/azure/virtual-network/virtual-networks-udr-overview) to ensure transitive networking is enabled from the REDCap spoke networks and the AD servers.
 
 - Azure Storage Account or Terraform Cloud to store your remote state files. 
 
@@ -33,17 +35,18 @@ Before you begin, make sure you have the following:
     - `/26` for `IntegrationSubnet` 
 
 - DNS IP address(es).
+
 - Firewall IP address.
 
-    > Make sure your firewall is configured to allow traffic to pass from and to the REDCap virtual networks.
+    > Make sure your firewall is configured to allow traffic to pass from and to the REDCap virtual networks. See [this link](https://docs.microsoft.com/en-us/azure/firewall/tutorial-firewall-deploy-portal#configure-a-network-rule) if you are using Azure Firewall.
 
-- VNET Peering information.
+- VNET Peering information. More on vnet peering [here](https://docs.microsoft.com/en-us/azure/virtual-network/virtual-network-peering-overview).
     
     > Terraform will perform the one-way peer from REDCap to your hub virtual network
 
 - Route table routes.
     
-    > Hub/Spoke topology means you may be relying on resources that are deployed in another spoke virtual network. If resources are in a spoke, you'll need to send the traffic to the firewall in the hub for spoke-to-spoke transit networking. 
+    > Hub/Spoke topology means you may be relying on resources that are deployed in another spoke virtual network. If resources are in a spoke, you'll need to send the traffic to the firewall in the hub for spoke-to-spoke transit networking. More on vnet traffic routing [here](https://docs.microsoft.com/en-us/azure/virtual-network/virtual-networks-udr-overview).
 
 ## Naming conventions
 
@@ -57,23 +60,22 @@ The alternative would be to create branches for each deployment but managing cod
 
 ## So, what get's deployed?
 
-- Azure Monitor alerts to satisfy HIPAA compliance policies.
-- Azure Virtual Network with service endpoints enabled for Key Vault, Storage, Sql, and Web and a subnet delegation for App Service Vnet integration.
+- [Azure Monitor alerts](https://docs.microsoft.com/en-us/azure/azure-monitor/alerts/alerts-overview) to satisfy HIPAA compliance policies.
+- Azure Virtual Network with [service endpoints](https://docs.microsoft.com/en-us/azure/virtual-network/virtual-network-service-endpoints-overview) enabled for Key Vault, Storage, Sql, and Web and a subnet delegation for App Service Vnet integration.
     > Virtual network peering will also be made to hub (one way) but peer from hub to REDCap is not in scope here. Also, route table routes will be added to send traffic for internet and AD to the firewall but routes coming back to REDCap is not in scope here either. You will need to manage these in another repo or via Azure Portal.
-- Azure Private DNS zones for blob, mysql, and keyvault.
+- [Azure Private DNS](https://docs.microsoft.com/en-us/azure/dns/private-dns-overview) zones for blob, mysql, and keyvault.
     > The decision was made to deploy private DNS zones and linked to the REDCap virtual network as opposed to the hub virtual network which is more common. The reason for this was to reduce the network dependency (other than the hub peering) and not allow the REDCap resources to be resolvable within the rest of the network topology.
-- Azure Storage Account with private endpoint and service endpoints enabled (general purpose) to store survey data.
-- Azure Storage Account with private endpoint and service endpoints enabled (premium files) to mount as a shared drive in the secure workstation.
-- Azure Key Vault with private endpoint and service endpoints enabled to store application secrets. Access policies will be configured for AppService to be able to read secrets.
-- Azure Database for MySQL with private endpoint enabled and service endpoints.
-- Azure App Service to host REDCap application. This service will be vnet integrated and have access restrictions in place to NOT allow any incoming traffic from any source except the ComputeSubnet (from secure workstation), IntegrationSubnet, or Azure FrontDoor. Client IP is also included for testing purposes.
-- Azure Application Insights for monitoring
-- Windows Virtual Desktop to provide secure computing environment to pull survey data and perform data analysis.
+- [Azure Storage Account with private endpoint](https://docs.microsoft.com/en-us/azure/storage/common/storage-private-endpoints) and service endpoints enabled (general purpose) to store survey data.
+- [Azure Storage Account with private endpoint](https://docs.microsoft.com/en-us/azure/storage/common/storage-private-endpoints) and service endpoints enabled (premium files) to mount as a shared drive in the secure workstation.
+- [Azure Key Vault with private endpoint](https://docs.microsoft.com/en-us/azure/key-vault/general/private-link-service) and service endpoints enabled to store application secrets. Access policies will be configured for AppService to be able to read secrets.
+- [Azure Database for MySQL with private endpoint](https://docs.microsoft.com/en-us/azure/mysql/concepts-data-access-security-private-link) enabled and service endpoints.
+- Azure App Service to host REDCap application. This service will be [vnet integrated](https://docs.microsoft.com/en-us/azure/app-service/web-sites-integrate-with-vnet) and have [network access restrictions](https://docs.microsoft.com/en-us/azure/app-service/app-service-ip-restrictions) in place to NOT allow any incoming traffic from any source except the ComputeSubnet (from secure workstation), IntegrationSubnet, or [Azure FrontDoor](https://azure.microsoft.com/en-us/services/frontdoor/). Client IP is also included for testing purposes.
+- [Azure Application Insights](https://docs.microsoft.com/en-us/azure/azure-monitor/app/app-insights-overview) for app monitoring
+- [Windows Virtual Desktop](https://docs.microsoft.com/en-us/azure/virtual-desktop/overview) to provide secure computing environment to pull survey data and perform data analysis.
 - Virtual Machines as WVD Session Hosts
-    > The virtual machines will come with DependencyAgent, IaaSAntimalware, and WinRM (for Ansible) installed as VM Extensions
-- Azure Recovery Services Vault with VM Backup Policy (will need to add Azure Files backup policy too)
-    > The recovery policy will need to be standardized and/or variable-ized
-- Ansible inventory file which you can use to run the `site.yml` playbook against
+    > The virtual machines will have the following extensions installed: [DependencyAgent](https://docs.microsoft.com/en-us/azure/virtual-machines/extensions/agent-dependency-windows), [IaaSAntimalware](https://docs.microsoft.com/en-us/azure/virtual-machines/extensions/iaas-antimalware-windows), and [WinRM (for Ansible)](https://docs.ansible.com/ansible/latest/user_guide/windows_winrm.html) installed via [Custom Script Extension](https://docs.microsoft.com/en-us/azure/virtual-machines/extensions/custom-script-windows).
+- [Azure Recovery Services Vault](https://docs.microsoft.com/en-us/azure/backup/backup-azure-recovery-services-vault-overview) with [VM Backup Policy](https://docs.microsoft.com/en-us/azure/backup/backup-azure-manage-vms) and [Azure Files backup policy](https://docs.microsoft.com/en-us/azure/backup/backup-afs).
+- [Ansible inventory file](https://docs.ansible.com/ansible/latest/network/getting_started/first_inventory.html) which you can use to run the `site.yml` playbook against
 
 ## Provisioning REDCap Infrastructure
 
@@ -91,7 +93,7 @@ The alternative would be to create branches for each deployment but managing cod
 
 ## Configure REDCap WVD Workstations
 
-Configuration of secure workstations will be automated using Ansible. The `site.yml` ansible playbook found in this repo relies on a few variables needed to  domain join your virtual machines. Rather then saving credentials to the repo (never a good thing) we'll use `ansible-vault` to encrypt contents and pass in a `secrets.yml` file on the ansible-playbook run. 
+Configuration of secure workstations will be automated using Ansible. The `site.yml` [Ansible Playbook](https://docs.ansible.com/ansible/latest/user_guide/playbooks.html) found in this repo relies on a few variables needed to  domain join your virtual machines. Rather then saving credentials to the repo (never a good thing) we'll use `ansible-vault` to encrypt contents leveraging [Ansible Vault](https://docs.ansible.com/ansible/latest/user_guide/vault.html) and pass in a `secrets.yml` file on the ansible-playbook run. 
 
 Let's start by creating a vault file:
 
@@ -116,7 +118,7 @@ The file `secrets.yml` needs to be saved to your repository or downloaded as a s
 
 To use view the ansible vault file you'll need to enter the vault password to decrypt the contents. However, in a pipeline scenario, you will not have the opportunity to enter the pipeline at runtime, but you can use a file and point the ansible-vault to that. This is the approach we'll use for the pipeline. 
 
-Create a vault-pass file.
+Create a `vault-pass` file.
 
 ```sh
 echo '<YOUR_ANSIBLE_VAULT_PASSWORD>' > vaultpass
@@ -146,7 +148,7 @@ ansible-playbook -i inventory-sample2 -e @secrets.yml --vault-password-file vaul
 
 ## Azure DevOps Pipeline
 
-This repo comes with an `azure-pipelines.yml` file. To use it, you'll need to setup a [Variable Group](https://docs.microsoft.com/en-us/azure/devops/pipelines/library/variable-groups?view=azure-devops&tabs=yaml) and add the following secrets. Ideally you will be storing these values in Azure Key Vault and using that to link secrets:
+This repo comes with an `azure-pipelines.yml` file. To use it, you'll need to setup a [Variable Group](https://docs.microsoft.com/en-us/azure/devops/pipelines/library/variable-groups?view=azure-devops&tabs=yaml) and add the following secrets. Ideally you will be storing these values in [Azure Key Vault](https://docs.microsoft.com/en-us/azure/devops/pipelines/library/variable-groups?view=azure-devops&tabs=yaml#link-secrets-from-an-azure-key-vault) and using that to link secrets:
 
 - `client-id` - used by terraform
 - `client-secret` - used by terraform
@@ -157,6 +159,6 @@ This repo comes with an `azure-pipelines.yml` file. To use it, you'll need to se
 - `redcapzip` - this is the publically accessible (yet secure) URL to your REDCap zip file
 - `ansible-vault-password` - this is used to decrypt your ansible-vault without being prompted for a password
 
-You should also provision a small Linux VM in your REDCap shared services subscription and install the Azure DevOps Build Agent software on it. This way, you will be able to use your build machine to invoke the Ansible playbook against the new session host VMs using private IP addresses.
+You should also provision a small Linux VM in your REDCap shared services subscription and install the self-hosted [Azure DevOps Build Agent](https://docs.microsoft.com/en-us/azure/devops/pipelines/agents/v2-linux?view=azure-devops) software on it. This way, you will be able to use your build machine to invoke the Ansible playbook against the new session host VMs using private IP addresses within your Azure virtual network.
 
 Lastly, add pipeline variables called `notifyUsers` and `workspace` that can be [set at queue time](https://docs.microsoft.com/en-us/azure/devops/pipelines/process/variables?view=azure-devops&tabs=yaml%2Cbatch#allow-at-queue-time).
