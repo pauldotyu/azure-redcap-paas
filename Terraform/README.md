@@ -120,7 +120,7 @@ The file `secrets.yml` needs to be saved to your repository or downloaded as a s
 
 To use view the ansible vault file you'll need to enter the vault password to decrypt the contents. However, in a pipeline scenario, you will not have the opportunity to enter the pipeline at runtime, but you can use a file and point the ansible-vault to that. This is the approach we'll use for the pipeline. 
 
-Create a `vault-pass` file.
+Create a `vaultpass` file.
 
 ```sh
 echo '<YOUR_ANSIBLE_VAULT_PASSWORD>' > vaultpass
