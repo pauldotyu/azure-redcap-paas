@@ -4,6 +4,8 @@ This repo will deploy REDCap using Terraform. The terraform configuration will p
 
 > This repo does not include any REDCap shared services such as Azure FrontDoor or SendGrid. That needs to be managed from a separate repository.
 
+![Solution Architecture](img/solution-architecture.jpg)
+
 ## Prerequisites
 
 Before you begin, make sure you have the following:
