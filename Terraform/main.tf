@@ -16,7 +16,7 @@ data "http" "ifconfig" {
 
 resource "random_string" "redcap" {
   keepers = {
-    "project_id" = var.project_id
+    "project_id" = terraform.workspace
   }
   length    = 4
   min_lower = 4
@@ -74,7 +74,7 @@ resource "azurerm_policy_assignment" "redcap" {
 resource "azurerm_monitor_action_group" "redcap" {
   name                = "ag-${local.resource_name}"
   resource_group_name = azurerm_resource_group.redcap.name
-  short_name          = var.project_id
+  short_name          = terraform.workspace
   tags                = var.tags
 
   email_receiver {
@@ -364,7 +364,7 @@ resource "azurerm_storage_share" "redcap" {
 }
 
 ##############################################
-# AZURE KEY VAULT
+# AZURE KEY VAULT + SECRETS
 ##############################################
 resource "azurerm_key_vault" "redcap" {
   name                            = local.keyvault_name
@@ -474,9 +474,6 @@ resource "azurerm_key_vault_access_policy" "me" {
   ]
 }
 
-##############################################
-# AZURE KEY VAULT + SECRETS
-##############################################
 resource "azurerm_key_vault_secret" "mysql" {
   name         = "mysql-password"
   value        = random_password.redcap.result
@@ -553,7 +550,7 @@ resource "azurerm_mysql_server" "redcap" {
   auto_grow_enabled                 = true
   backup_retention_days             = 30
   geo_redundant_backup_enabled      = true
-  infrastructure_encryption_enabled = true
+  infrastructure_encryption_enabled = false
   public_network_access_enabled     = true
   ssl_enforcement_enabled           = false
   #ssl_minimal_tls_version_enforced  = "TLS1_2"
@@ -755,7 +752,7 @@ resource "azurerm_app_service" "redcap" {
     "APPINSIGHTS_INSTRUMENTATIONKEY"                  = azurerm_application_insights.redcap.instrumentation_key
     "APPINSIGHTS_PROFILERFEATURE_VERSION"             = "1.0.0"
     "APPINSIGHTS_SNAPSHOTFEATURE_VERSION"             = "1.0.0"
-    "APPLICATIONINSIGHTS_CONNECTION_STRING"           = "InstrumentationKey=${azurerm_application_insights.redcap.instrumentation_key};IngestionEndpoint=https://westus2-0.in.applicationinsights.azure.com/"
+    "APPLICATIONINSIGHTS_CONNECTION_STRING"           = azurerm_application_insights.redcap.connection_string
     "ApplicationInsightsAgent_EXTENSION_VERSION"      = "~2"
     "DiagnosticServices_EXTENSION_VERSION"            = "~3"
     "InstrumentationEngine_EXTENSION_VERSION"         = "disabled"
@@ -789,6 +786,7 @@ resource "azurerm_app_service" "redcap" {
     }
   }
 
+  # This will not work as the deploy.ps1 script in the repo relies on app configuration settings but they are not available in time when running this bit as part of the resource deployment
   # source_control {
   #   repo_url           = var.repoURL
   #   branch             = var.branch
@@ -844,7 +842,7 @@ resource "azurerm_virtual_desktop_host_pool" "redcap" {
   location                 = azurerm_resource_group.redcap.location
   type                     = "Pooled"
   load_balancer_type       = "BreadthFirst"
-  friendly_name            = "REDCap ${upper(var.project_id)} Host Pool"
+  friendly_name            = "REDCap ${upper(terraform.workspace)} Host Pool"
   description              = "REDCap WVD host pool for remote app and remote desktop services"
   validate_environment     = false
   maximum_sessions_allowed = 999999
@@ -861,7 +859,7 @@ resource "azurerm_virtual_desktop_application_group" "redcap" {
   location            = azurerm_resource_group.redcap.location
   host_pool_id        = azurerm_virtual_desktop_host_pool.redcap.id
   type                = "Desktop"
-  friendly_name       = "REDCap ${upper(var.project_id)} Workstation"
+  friendly_name       = "REDCap ${upper(terraform.workspace)} Workstation"
   description         = "Windows 10 Desktops"
 }
 
@@ -869,7 +867,7 @@ resource "azurerm_virtual_desktop_workspace" "redcap" {
   name                = "ws-${local.resource_name}"
   resource_group_name = azurerm_resource_group.redcap.name
   location            = azurerm_resource_group.redcap.location
-  friendly_name       = "REDCap ${upper(var.project_id)}  Workspace"
+  friendly_name       = "REDCap ${upper(terraform.workspace)}  Workspace"
   description         = "Session desktops"
 }
 
@@ -1011,44 +1009,44 @@ resource "azurerm_backup_protected_file_share" "redcap" {
 #####################################################################################################
 # VM EXTENSIONS - https://docs.microsoft.com/en-us/azure/virtual-machines/extensions/overview
 #####################################################################################################
-resource "azurerm_virtual_machine_extension" "da" {
-  count                      = length(azurerm_windows_virtual_machine.redcap)
-  name                       = "DAExtension"
-  virtual_machine_id         = azurerm_windows_virtual_machine.redcap[count.index].id
-  publisher                  = "Microsoft.Azure.Monitoring.DependencyAgent"
-  type                       = "DependencyAgentWindows"
-  type_handler_version       = "9.5"
-  auto_upgrade_minor_version = true
-  tags                       = var.tags
+# resource "azurerm_virtual_machine_extension" "da" {
+#   count                      = length(azurerm_windows_virtual_machine.redcap)
+#   name                       = "DAExtension"
+#   virtual_machine_id         = azurerm_windows_virtual_machine.redcap[count.index].id
+#   publisher                  = "Microsoft.Azure.Monitoring.DependencyAgent"
+#   type                       = "DependencyAgentWindows"
+#   type_handler_version       = "9.5"
+#   auto_upgrade_minor_version = true
+#   tags                       = var.tags
 
-  depends_on = [
-    azurerm_windows_virtual_machine.redcap
-  ]
-}
+#   depends_on = [
+#     azurerm_windows_virtual_machine.redcap
+#   ]
+# }
 
-# https://docs.microsoft.com/en-us/azure/security/fundamentals/antimalware-code-samples#enable-and-configure-microsoft-antimalware-for-azure-resource-manager-vms
-# Get-AzVMExtensionImage -Location westus2 -PublisherName "Microsoft.Azure.Security" -Type “IaaSAntimalware"
-resource "azurerm_virtual_machine_extension" "ia" {
-  count                      = length(azurerm_windows_virtual_machine.redcap)
-  name                       = "IaaSAntimalware"
-  virtual_machine_id         = azurerm_windows_virtual_machine.redcap[count.index].id
-  publisher                  = "Microsoft.Azure.Security"
-  type                       = "IaaSAntimalware"
-  type_handler_version       = "1.5"
-  auto_upgrade_minor_version = true
-  tags                       = var.tags
+# # https://docs.microsoft.com/en-us/azure/security/fundamentals/antimalware-code-samples#enable-and-configure-microsoft-antimalware-for-azure-resource-manager-vms
+# # Get-AzVMExtensionImage -Location westus2 -PublisherName "Microsoft.Azure.Security" -Type “IaaSAntimalware"
+# resource "azurerm_virtual_machine_extension" "ia" {
+#   count                      = length(azurerm_windows_virtual_machine.redcap)
+#   name                       = "IaaSAntimalware"
+#   virtual_machine_id         = azurerm_windows_virtual_machine.redcap[count.index].id
+#   publisher                  = "Microsoft.Azure.Security"
+#   type                       = "IaaSAntimalware"
+#   type_handler_version       = "1.5"
+#   auto_upgrade_minor_version = true
+#   tags                       = var.tags
 
-  settings = <<SETTINGS
-    {
-      "AntimalwareEnabled": true
-    }
-  SETTINGS
+#   settings = <<SETTINGS
+#     {
+#       "AntimalwareEnabled": true
+#     }
+#   SETTINGS
 
-  depends_on = [
-    azurerm_windows_virtual_machine.redcap,
-    azurerm_virtual_machine_extension.da
-  ]
-}
+#   depends_on = [
+#     azurerm_windows_virtual_machine.redcap,
+#     azurerm_virtual_machine_extension.da
+#   ]
+# }
 
 # Install WinRM for Ansible
 # https://docs.microsoft.com/en-us/azure/virtual-machines/extensions/custom-script-windows
@@ -1077,8 +1075,8 @@ resource "azurerm_virtual_machine_extension" "ans" {
 
   depends_on = [
     azurerm_windows_virtual_machine.redcap,
-    azurerm_virtual_machine_extension.da,
-    azurerm_virtual_machine_extension.ia
+    # azurerm_virtual_machine_extension.da,
+    # azurerm_virtual_machine_extension.ia
   ]
 }
 
@@ -1121,8 +1119,8 @@ resource "azurerm_subnet_route_table_association" "redcap" {
 
   depends_on = [
     azurerm_subnet.redcap["ComputeSubnet"],
-    azurerm_virtual_machine_extension.da,
-    azurerm_virtual_machine_extension.ia,
+    # azurerm_virtual_machine_extension.da,
+    # azurerm_virtual_machine_extension.ia,
     azurerm_virtual_machine_extension.ans
   ]
 }
@@ -1131,17 +1129,11 @@ resource "azurerm_subnet_route_table_association" "redcap" {
 # ANSIBLE INVENTORY FILE
 ##############################################
 resource "local_file" "redcap" {
-  filename = "ansible/inventory-${var.project_id}"
+  filename = "ansible/inventory"
+
   content = templatefile("ansible/template-inventory.tpl",
     {
-      hosts    = zipmap(azurerm_windows_virtual_machine.redcap.*.name, azurerm_network_interface.redcap.*.private_ip_address)
-      user     = var.vm_username
-      password = var.vm_password
+      hosts = zipmap(azurerm_windows_virtual_machine.redcap.*.name, azurerm_network_interface.redcap.*.private_ip_address),
     }
   )
-
-  depends_on = [
-    azurerm_windows_virtual_machine.redcap,
-    azurerm_network_interface.redcap
-  ]
 }

@@ -1,7 +1,16 @@
 # the values here will be updated per deployment
-subscription_id = "781fa797-7ac8-4e52-ac22-2fc276d95ce3"
+subscription_id = "<YOUR_REDCAP_DEPLOYMENT_SUBSCRIPTION_ID>"
+
+vnet_peerings = [
+  {
+    peering_name     = "to-netops"
+    vnet_resource_id = "<YOUR_HUB_VNET_RESOURCE_ID>"
+  },
+]
+
+devops_subnet_id = "<YOUR_DEVOPS_SUBNET_RESOURCE_ID>"
+
 environment     = "prod"
-project_id      = "sample4"
 
 tags = {
   "po-number"          = "zzz"
@@ -22,19 +31,19 @@ vm_image = {
 
 
 # this is really important - make sure addresses do not overlap
-vnet_address_space = ["172.17.1.128/25"]
+vnet_address_space = ["10.230.1.128/25"]
 subnets = [
   {
     name           = "PrivateLinkSubnet"
-    address_prefix = "172.17.1.128/27"
+    address_prefix = "10.230.1.128/27"
   },
   {
     name           = "ComputeSubnet"
-    address_prefix = "172.17.1.160/27"
+    address_prefix = "10.230.1.160/27"
   },
   {
     name           = "IntegrationSubnet"
-    address_prefix = "172.17.1.192/26"
+    address_prefix = "10.230.1.192/26"
   }
 ]
 
@@ -69,12 +78,3 @@ subnet_routes = [
     next_hop_in_ip_address = "10.21.1.132"
   }
 ]
-
-vnet_peerings = [
-  {
-    peering_name     = "to-hub"
-    vnet_resource_id = "/subscriptions/672f7b3e-5c19-454f-bb04-4843676bf396/resourceGroups/rg-netops/providers/Microsoft.Network/virtualNetworks/vn-hub"
-  }
-]
-
-devops_subnet_id = "/subscriptions/672f7b3e-5c19-454f-bb04-4843676bf396/resourceGroups/rg-devops/providers/Microsoft.Network/virtualNetworks/vn-devops/subnets/ComputeSubnet"

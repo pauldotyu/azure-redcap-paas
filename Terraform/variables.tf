@@ -33,11 +33,6 @@ variable "location" {
   }
 }
 
-variable "project_id" {
-  type        = string
-  description = "Project identifier. This value should be the same as your worksapce and *.tfvar filename."
-}
-
 variable "vnet_address_space" {
   type        = list(string)
   description = "Virtual network address space."

@@ -15,40 +15,41 @@ trigger:
     jobs:
     - job: install_tools
       displayName: Install Tools
+      condition: ne(variables.workspace, '')
       steps:
       - script: |
-          echo -e "[azure-cli]
-          name=Azure CLI
-          baseurl=https://packages.microsoft.com/yumrepos/azure-cli
-          enabled=1
-          gpgcheck=1
-          gpgkey=https://packages.microsoft.com/keys/microsoft.asc" | sudo tee /etc/yum.repos.d/azure-cli.repo;
-          sudo yum install azure-cli -y;
+          #echo -e "[azure-cli]
+          #name=Azure CLI
+          #baseurl=https://packages.microsoft.com/yumrepos/azure-cli
+          #enabled=1
+          #gpgcheck=1
+          #gpgkey=https://packages.microsoft.com/keys/microsoft.asc" | sudo tee /etc/yum.repos.d/azure-cli.repo;
+          #sudo yum install azure-cli -y;
           az --version
         displayName: Install Azure CLI
         name: install_azcli
       - script: |
-          sudo yum install -y yum-utils
-          sudo yum-config-manager --add-repo https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo
-          sudo yum -y install terraform
+          #sudo yum install -y yum-utils
+          #sudo yum-config-manager --add-repo https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo
+          #sudo yum -y install terraform
           terraform --version
         displayName: Install Terraform
         name: install_terraform
       - script: |
-          sudo yum install python3-pip
-          sudo pip3 install --upgrade pip
-          sudo pip3 install wheel 
-          sudo pip3 install ansible
-          sudo pip3 install "pywinrm>=0.3.0"
-          sudo pip3 install azure-keyvault azure-common
-          ansible-galaxy collection install ansible.windows
-          ansible-galaxy install azure.azure_preview_modules
+          #sudo yum install python3-pip
+          #sudo pip3 install --upgrade pip
+          #sudo pip3 install wheel 
+          #sudo pip3 install ansible
+          #sudo pip3 install "pywinrm>=0.3.0"
+          #sudo pip3 install azure-keyvault azure-common
+          #ansible-galaxy collection install ansible.windows
+          #ansible-galaxy install azure.azure_preview_modules
           ansible --version
         displayName: Install Ansible
         name: install_ansible
   - stage: plan
     displayName: Plan
-    condition: and(ne(variables.workspace, ''), eq(variables.destroy, false))
+    condition: and(succeeded('tools'), eq(variables.destroy, false))
     dependsOn: tools
     jobs: 
     - job: terraform_plan
@@ -64,7 +65,6 @@ trigger:
           terraform plan -var-file="workspaces/$(workspace).tfvars" -var="vm_username=$(local-vm-username)" -var="vm_password=$(local-vm-password)" -var="redcapAppZip=$(redcapzip)" -out=$(System.DefaultWorkingDirectory)/$(workspace).tfplan
         displayName: Terraform Plan
         name: terraform_plan
-        condition: and(ne(variables.workspace, ''), eq(variables.destroy, false))
       - task: PublishPipelineArtifact@1
         inputs:
           targetPath: '$(System.DefaultWorkingDirectory)/$(workspace).tfplan'
@@ -73,13 +73,11 @@ trigger:
         name: publish_tfplan
   - stage: build
     displayName: Build
-    condition: and(eq(dependencies.plan.result, 'Succeeded'), ne(variables.workspace, ''), eq(variables.destroy, false))
-    dependsOn: 
-    - plan
+    condition: succeeded('plan')
+    dependsOn: plan
     jobs:
     - job: manual_validation
-      displayName: Manual Approval
-      condition: and(ne(variables.workspace, ''), eq(variables.destroy, false))
+      displayName: Approval Gate
       pool: Server
       steps:
       - task: ManualValidation@0
@@ -90,9 +88,7 @@ trigger:
         name: manual_validation_task
     - job: terraform_apply
       displayName: Terraform Apply
-      condition: and(eq(dependencies.manual_validation.result, 'Succeeded'), ne(variables.workspace, ''), eq(variables.destroy, false))
-      dependsOn: 
-      - manual_validation
+      dependsOn: manual_validation
       steps:
       - task: DownloadPipelineArtifact@2
         inputs:
@@ -117,16 +113,14 @@ trigger:
         name: terraform_apply
       - task: PublishPipelineArtifact@1
         inputs:
-          targetPath: '$(System.DefaultWorkingDirectory)/ansible/inventory-$(workspace)'
-          artifactName: inventory-$(workspace)
-        displayName: Publish inventory-$(workspace)
+          targetPath: $(System.DefaultWorkingDirectory)/ansible/inventory
+          artifactName: inventory
+        displayName: Publish inventory
         name: publish_inventory
     - job: vnet_peering
       displayName: VNET Peering
-      condition: and(eq(dependencies.manual_validation.result, 'Succeeded'), eq(dependencies.terraform_apply.result, 'Succeeded'), ne(variables.workspace, ''), eq(variables.destroy, false))
-      dependsOn: 
-        - manual_validation
-        - terraform_apply
+      condition: succeeded('terraform_apply')
+      dependsOn: terraform_apply
       variables:
         TF_DEPLOY_SUBSCRIPTION: $[ dependencies.terraform_apply.outputs['terraform_apply.TF_DEPLOY_SUBSCRIPTION'] ]
         TF_VNET_ID: $[ dependencies.terraform_apply.outputs['terraform_apply.TF_VNET_ID'] ]
@@ -135,15 +129,22 @@ trigger:
           az login --service-principal --username $(client-id) --password $(client-secret) --tenant $(tenant-id)
           az account set -s $(TF_DEPLOY_SUBSCRIPTION)
           az account set -s $(main-subscription-id)
-          az network vnet peering create -n to-redcap-$(workspace) -g rg-netops --vnet-name vn-hub --remote-vnet $(TF_VNET_ID) --allow-forwarded-traffic --allow-gateway-transit --allow-vnet-access
+          echo "Peering vn-hub to redcap vnet"
+          az network vnet peering create -n to-redcap-$(workspace) -g $(hub-rg-name) --vnet-name $(hub-vnet-name) --remote-vnet $(TF_VNET_ID) --allow-forwarded-traffic --allow-gateway-transit --allow-vnet-access
         displayName: Establish VNET peerings coming back to REDCap
+    - job: manual_validation_deploy
+      displayName: Approval Gate
+      condition: succeeded('vnet_peering')
+      dependsOn: vnet_peering
+      pool: Server
+      steps:
+      - task: ManualValidation@0
+        inputs:
+          notifyUsers: $(notifyUsers)
+          instructions: 'Confirm that all infrastructure has been provisioned successfully.'
     - job: deploy_source
       displayName: REDCap Code Deploy
-      condition: and(eq(dependencies.manual_validation.result, 'Succeeded'), eq(dependencies.terraform_apply.result, 'Succeeded'), eq(dependencies.vnet_peering.result, 'Succeeded'), ne(variables.workspace, ''), eq(variables.destroy, false))
-      dependsOn: 
-        - manual_validation
-        - terraform_apply
-        - vnet_peering
+      dependsOn: manual_validation_deploy
       variables:
         TF_DEPLOY_SUBSCRIPTION: $[ dependencies.terraform_apply.outputs['terraform_apply.TF_DEPLOY_SUBSCRIPTION'] ]
         TF_DEPLOY_SOURCE: $[ dependencies.terraform_apply.outputs['terraform_apply.TF_DEPLOY_SOURCE'] ]
@@ -157,38 +158,29 @@ trigger:
         displayName: Deploy REDCap from GitHub and apply database schema
     - job: ansible_playbook
       displayName: Ansible Playbook for WVD
-      condition: and(eq(dependencies.manual_validation.result, 'Succeeded'), eq(dependencies.terraform_apply.result, 'Succeeded'), eq(dependencies.vnet_peering.result, 'Succeeded'), eq(dependencies.deploy_source.result, 'Succeeded'), ne(variables.workspace, ''), eq(variables.destroy, false))
-      dependsOn: 
-        - manual_validation
-        - terraform_apply
-        - vnet_peering
-        - deploy_source
+      condition: succeeded('deploy_source')
+      dependsOn: deploy_source
       variables:
         TF_REGISTRATION_TOKEN: $[ dependencies.terraform_apply.outputs['terraform_apply.TF_REGISTRATION_TOKEN'] ]
       steps:
       - task: DownloadPipelineArtifact@2
         inputs:
-          artifactName: inventory-$(workspace)
-          patterns: '**/inventory-$(workspace)'
+          artifactName: inventory
+          patterns: '**/inventory'
           path: $(System.DefaultWorkingDirectory)/ansible
-        displayName: Download inventory-$(workspace)
+        displayName: Download inventory
         name: download_inventory
       - script: |
-          ansible all -i inventory-$(workspace) -m win_ping
-          sed -i "s/<REGISTRATION_TOKEN>/$(TF_REGISTRATION_TOKEN)/g" site.yml
-          echo '$(ansible-vault-password)' > vaultpass
-          ansible-playbook -i inventory-$(workspace) -e @secrets.yml --vault-password-file vaultpass site.yml
+          echo '$(ansible-vault-password)' > pass        
+          ansible all -i inventory -e @secrets.yml --vault-password-file pass -m win_ping
+          ansible-playbook -i inventory -e "registration_token=$(TF_REGISTRATION_TOKEN)" -e @secrets.yml --vault-password-file pass site.yml
+          rm pass
         displayName: Run Ansible playbook to install WVD agents and domain join
         workingDirectory: ansible
     - job: delete_files
       displayName: Delete build directory
-      condition: and(eq(dependencies.manual_validation.result, 'Succeeded'), eq(dependencies.terraform_apply.result, 'Succeeded'), eq(dependencies.vnet_peering.result, 'Succeeded'), eq(dependencies.deploy_source.result, 'Succeeded'), eq(dependencies.ansible_playbook.result, 'Succeeded'), ne(variables.workspace, ''), eq(variables.destroy, false))
-      dependsOn: 
-        - manual_validation
-        - terraform_apply
-        - vnet_peering
-        - deploy_source
-        - ansible_playbook
+      condition: succeeded('ansible_playbook')
+      dependsOn: ansible_playbook
       steps:
       - task: DeleteFiles@1
         inputs:
@@ -196,7 +188,7 @@ trigger:
           RemoveSourceFolder: true
   - stage: destroy
     displayName: Destroy
-    condition: and(ne(variables.workspace, ''), eq(variables.destroy, true))
+    condition: and(succeeded('tools'), eq(variables.destroy, true))
     dependsOn: tools
     jobs: 
     - job: manual_validation_destroy
@@ -209,7 +201,6 @@ trigger:
           instructions: 'Click resume to destroy...'
     - job: terraform_destroy
       displayName: Terraform Destroy
-      condition: and(eq(dependencies.manual_validation_destroy.result, 'Succeeded'), ne(variables.workspace, ''), eq(variables.destroy, true))
       dependsOn: manual_validation_destroy
       steps: 
       - script: |
@@ -233,24 +224,19 @@ trigger:
         displayName: Delete REDCap $(workspace) workspace
     - job: vnet_peer_destroy
       displayName: Delete VNET Peering
-      condition: and(eq(dependencies.manual_validation_destroy.result, 'Succeeded'), eq(dependencies.terraform_destroy.result, 'Succeeded'), ne(variables.workspace, ''), eq(variables.destroy, true))
-      dependsOn: 
-      - manual_validation_destroy
-      - terraform_destroy
+      condition: succeeded('terraform_destroy')
+      dependsOn: terraform_destroy
       steps:
       - script: |
           az login --service-principal --username $(client-id) --password $(client-secret) --tenant $(tenant-id)
           az account set -s $(main-subscription-id)
-          az network vnet peering delete -n to-redcap-$(workspace) -g rg-netops --vnet-name vn-hub
+          az network vnet peering delete -n to-redcap-$(workspace) -g $(hub-rg-name) --vnet-name $(hub-vnet-name)
         displayName: Delete VNET Peering from vn-hub to vn-redcap-$(workspace)
         # also need to destroy computer objects in aadds
     - job: delete_files
       displayName: Delete build directory
-      condition: and(eq(dependencies.manual_validation_destroy.result, 'Succeeded'), eq(dependencies.terraform_destroy.result, 'Succeeded'), eq(dependencies.vnet_peer_destroy.result, 'Succeeded'), ne(variables.workspace, ''), eq(variables.destroy, true))
-      dependsOn: 
-      - manual_validation_destroy
-      - terraform_destroy
-      - vnet_peer_destroy
+      condition: succeeded('vnet_peer_destroy')
+      dependsOn: vnet_peer_destroy
       steps:
       - task: DeleteFiles@1
         inputs:
