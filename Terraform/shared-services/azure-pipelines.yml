@@ -1,0 +1,106 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger:
+- main
+
+pool:
+  name: Contoso
+  demands:
+    - agent.name -equals devops-1
+
+variables:
+  - group: kvdevops1
+
+stages:
+- stage: plan
+  displayName: Plan
+  condition: and(ne(variables.workspace, ''), eq(variables.destroy, false))
+  jobs:
+  - job: terraform_plan
+    displayName: Terraform Plan
+    steps:
+    - script: |
+        export ARM_CLIENT_ID=$(client-id) 
+        export ARM_CLIENT_SECRET=$(client-secret)
+        export ARM_SUBSCRIPTION_ID=$(main-subscription-id)
+        export ARM_TENANT_ID=$(tenant-id)
+        terraform init
+        terraform plan -var-file="configs/$(workspace).tfvars" -var="sendgrid_password=$(sendgrid-password)" -out=$(System.DefaultWorkingDirectory)/$(Build.BuildId).tfplan
+      displayName: Terraform Plan
+      name: terraform_plan
+    - task: PublishPipelineArtifact@1
+      inputs:
+        targetPath: '$(System.DefaultWorkingDirectory)/$(Build.BuildId).tfplan'
+        artifactName: $(Build.BuildId).tfplan
+      displayName: Publish $(Build.BuildId).tfplan
+      name: publish_tfplan
+- stage: build
+  displayName: Build
+  condition: and(eq(dependencies.plan.result, 'Succeeded'), ne(variables.workspace, ''), eq(variables.destroy, false))
+  dependsOn: 
+  - plan
+  jobs:
+  - job: manual_validation
+    displayName: Manual Approval
+    condition: and(ne(variables.workspace, ''), eq(variables.destroy, false))
+    pool: Server
+    steps:
+    - task: ManualValidation@0
+      inputs:
+        notifyUsers: $(notifyUsers)
+        instructions: 'Have you looked at the Terraform plan output?'
+      displayName: Manual Approval
+      name: manual_validation_task
+  - job: terraform_apply
+    displayName: Terraform Apply
+    condition: and(eq(dependencies.manual_validation.result, 'Succeeded'), ne(variables.workspace, ''), eq(variables.destroy, false))
+    dependsOn: 
+    - manual_validation
+    steps:
+    - task: DownloadPipelineArtifact@2
+      inputs:
+        artifactName: $(Build.BuildId).tfplan
+        patterns: '**/$(Build.BuildId).tfplan'
+        path: $(System.DefaultWorkingDirectory)
+      displayName: Download $(Build.BuildId).tfplan
+      name: download_tfplan
+    - script: |
+        export ARM_CLIENT_ID=$(client-id) 
+        export ARM_CLIENT_SECRET=$(client-secret)
+        export ARM_SUBSCRIPTION_ID=$(main-subscription-id)
+        export ARM_TENANT_ID=$(tenant-id)
+        terraform init
+        terraform apply --auto-approve $(System.DefaultWorkingDirectory)/$(Build.BuildId).tfplan
+      displayName: Terraform Apply
+      name: terraform_apply  
+- stage: destroy
+  displayName: Destroy
+  condition: and(ne(variables.workspace, ''), eq(variables.destroy, true))
+  jobs: 
+  - job: manual_validation
+    displayName: Manual Approval
+    pool: Server
+    steps:
+    - task: ManualValidation@0
+      inputs:
+        notifyUsers: $(notifyUsers)
+        instructions: 'Click resume to destroy...'
+      displayName: Manual Approval
+      name: manual_validation_task
+  - job: terraform_destroy
+    displayName: Terraform Destroy
+    condition: and(eq(dependencies.manual_validation.result, 'Succeeded'), ne(variables.workspace, ''), eq(variables.destroy, true))
+    dependsOn: manual_validation
+    steps: 
+    - script: |
+        export ARM_CLIENT_ID=$(client-id) 
+        export ARM_CLIENT_SECRET=$(client-secret)
+        export ARM_SUBSCRIPTION_ID=$(main-subscription-id)
+        export ARM_TENANT_ID=$(tenant-id)
+        terraform init -reconfigure
+        terraform destroy -var-file="configs/$(workspace).tfvars" -var="sendgrid_password=$(sendgrid-password)" --auto-approve
+      displayName: Terraform Destroy
+      name: terraform_destroy
